@@ -4,8 +4,9 @@
 // to $MAKEFUN_OUTPUT_DIR/entry.txt (default /output).
 // Node.js 22, standard library only. Deterministic: no network, no
 // randomness, no clock. The program self-verifies the output before
-// exiting: 1-280 Unicode code points, non-whitespace, single line,
-// and re-reads the file byte-for-byte to confirm it matches.
+// exiting: 1-280 Unicode code points, non-whitespace on every line,
+// single line, no control characters, no trailing whitespace, and it
+// re-reads the file byte-for-byte to confirm it matches.
 
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -33,6 +34,29 @@ if (JOKE.trim().length === 0) {
 }
 if (JOKE.includes("\n") || JOKE.includes("\r")) {
   throw new Error("joke must be a single line");
+}
+// Every line must carry real content: a line that is only whitespace
+// would be invisible padding, not part of the joke.
+for (const line of JOKE.split("\n")) {
+  if (line.trim().length === 0) {
+    throw new Error("every line of the joke must contain non-whitespace text");
+  }
+}
+// No control characters may appear in the joke (line breaks are already
+// rejected above, so any remaining control code point is stray data).
+for (const ch of JOKE) {
+  const cp = ch.codePointAt(0)!;
+  if ((cp < 0x20 && cp !== 0x0a && cp !== 0x0d) || cp === 0x7f) {
+    throw new Error(
+      `joke contains control character U+${cp.toString(16).padStart(4, "0")}`,
+    );
+  }
+}
+// The file must end exactly at the joke's last character: no trailing
+// newline or other trailing whitespace, so the file stays exactly
+// 133 code points.
+if (written.endsWith("\n") || written.endsWith("\r") || written !== written.trimEnd()) {
+  throw new Error("entry.txt must not end with trailing whitespace");
 }
 
 console.log(`Wrote ${outPath} (${codePoints} code points)`);
